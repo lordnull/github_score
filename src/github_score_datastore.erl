@@ -10,7 +10,7 @@
 %%% 4. Poll for those user(s) and increment them, even if the increment is 0.
 -module(github_score_datastore).
 
--export([increment_score/2, get_score/1, get_fewest_touched/0]).
+-export([increment_score/2, get_score/1]).
 -export([start_link/0]).
 
 -ifdef(TEST).
@@ -36,7 +36,7 @@ start_link() ->
 %% 'touched' counter.
 -spec increment_score(User :: term(), integer()) -> {ok, integer()}.
 increment_score(User, Amount) ->
-	[N, Touched] = ets:update_counter(?MODULE, User, [{2, Amount}, {3, 1}], {User, 0, 0}),
+	N = ets:update_counter(?MODULE, User, {2, Amount}, {User, 0, 0}),
 	{ok, N}.
 
 %% @doc Fetch the score for a given user identifier. Users that have yet to be
@@ -51,25 +51,6 @@ get_score(User) ->
 			{ok, 0}
 	end.
 
-%% @doc Get a list of user identifiers that have the lowest 'touched' count.
-%% Careful! This folds over the entire table! Also, f a large number of users
-%% have the same low value, this will return much data.
--spec get_fewest_touched() -> {ok, [ term() ]}.
-get_fewest_touched() ->
-	FoldFun =
-		fun({User, _Score, Touched}, {undefined, []}) ->
-				{Touched, [User]};
-			({_User, _Score, Touched}, {LowerTouch, Users}) when LowerTouch < Touched ->
-				{LowerTouch, Users};
-			({User, _Score, Touched}, {Touched, Users}) ->
-				{Touched, [User | Users]};
-			({User, _Score, Touched}, {_HigherTouched, _HigherUsers}) ->
-				{Touched, [User]}
-		end,
-	{_LowestTouch, Users} = ets:foldl(FoldFun, {undefined, []}, ?MODULE),
-	{ok, Users}.
-
-
 -ifdef(TEST).
 
 simple_test_() ->
@@ -83,7 +64,6 @@ simple_test_() ->
 	, ?_assertEqual({ok, 5}, ?MODULE:get_score(<<"user a">>))
 	, ?_assertEqual({ok, 27}, ?MODULE:increment_score(<<"user b">>, 27))
 	, ?_assertEqual({ok, 5}, ?MODULE:get_score(<<"user a">>))
-	, ?_assertEqual({ok, [<<"user b">>]}, ?MODULE:get_fewest_touched())
 	] }.
 
 -endif.
