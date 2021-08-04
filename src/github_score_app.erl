@@ -8,6 +8,7 @@ start(_Type, _Args) ->
 	Dispatch = cowboy_router:compile([
 		{'_',
 			[ {"/", github_score_index, {}}
+			, {"/scores/:user", github_score_handler, #{ mode => a_user}}
 			]
 		}]),
 	% I'm using 'start clear' rather than https because experience has told me
