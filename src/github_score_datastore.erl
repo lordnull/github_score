@@ -36,7 +36,7 @@ start_link() ->
 %% 'touched' counter.
 -spec increment_score(User :: term(), integer()) -> {ok, integer()}.
 increment_score(User, Amount) ->
-	N = ets:update_counter(?MODULE, User, [{2, Amount}, {3, 1}], {User, 0, 0}),
+	[N, Touched] = ets:update_counter(?MODULE, User, [{2, Amount}, {3, 1}], {User, 0, 0}),
 	{ok, N}.
 
 %% @doc Fetch the score for a given user identifier. Users that have yet to be
@@ -52,10 +52,22 @@ get_score(User) ->
 	end.
 
 %% @doc Get a list of user identifiers that have the lowest 'touched' count.
-%% Careful! If a large number of users have the same low value, this will
-%% return much data.
+%% Careful! This folds over the entire table! Also, f a large number of users
+%% have the same low value, this will return much data.
 -spec get_fewest_touched() -> {ok, [ term() ]}.
-get_fewest_touched() -> error(nyi).
+get_fewest_touched() ->
+	FoldFun =
+		fun({User, _Score, Touched}, {undefined, []}) ->
+				{Touched, [User]};
+			({_User, _Score, Touched}, {LowerTouch, Users}) when LowerTouch < Touched ->
+				{LowerTouch, Users};
+			({User, _Score, Touched}, {Touched, Users}) ->
+				{Touched, [User | Users]};
+			({User, _Score, Touched}, {_HigherTouched, _HigherUsers}) ->
+				{Touched, [User]}
+		end,
+	{_LowestTouch, Users} = ets:foldl(FoldFun, {undefined, []}, ?MODULE),
+	{ok, Users}.
 
 
 -ifdef(TEST).
