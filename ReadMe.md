@@ -52,23 +52,29 @@ This is primarily a proof of concept, and not what I would deliver as a final
 product. It's close, but needs at least another day of polish. The following
 is missing:
 
-* """Logging""". Currently only otp events are logged, and only to the console. This
+* **Logging**. Currently only otp events are logged, and only to the console. This
 makes it unsuitable for release, but adding logging using the existing erlang
 logger module is trivial. Mainly this is creating a reasonable default.
-* """Configuration""". The port, github url, and function that populates the datastore
+* **Configuration**. The port, github url, and function that populates the datastore
 from the poller are all hard-coded. While the last is likely to stay that way,
 it should be moved out of the supervisor and into some module that the supervisor
 can then reference. The others are obvious on why they should be configurable.
-* """Dialyzer""". While I've attempted to keep the types clean and documented, there
+* **Dialyzer**. While I've attempted to keep the types clean and documented, there
 is no replacement for a tool. Yet another relatively simple thing to add.
-* """Data storage""". The datastore is ets, which is memory only. Even a simple
+* **Data storage**. The datastore is ets, which is memory only. Even a simple
 switch to using dets, the disk backed version of ets, would be an improvement.
 For the purpose of the project as presented, anything more is likely overkill.
 Fortuately, datastore does not expose an underlying implementation, so swapping
 that is an isolated change.
-* """Improved Polling""". The polling as implemented is very naive. It doesn't
+* **Improved Polling**. The polling as implemented is very naive. It doesn't
 handle pagination, primarily, and so could lose or miss data. This would need to
 be shored up.
-* """Webhook""". Polling was the simplest thing that could work, and may end up
+* **Webhook**. Polling was the simplest thing that could work, and may end up
 being all we need. This is more of a feature that could be revisited than a
 hard requirement for me to be satisfied the job is "done".
+* **Documentation**. I never know if the documentation I've provided is enough
+or fully correct.
+
+Some of this would come out of code review, some from ci, and some from personal
+pride. But in the interest of time, I've decided to present what I have done,
+and present what I would do if this was a real project.
