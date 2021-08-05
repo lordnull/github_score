@@ -9,6 +9,9 @@ should be the same if written in Elixir.
 Building and Running
 =====
 
+This is in process of being implemented in elixir. To run the incomlete elixir version,
+use `mix` or `mix test` for the tests.
+
 Building requires git, erlang 22.1 or newer, and make.
 
 ## basic build:
