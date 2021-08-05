@@ -67,13 +67,13 @@ handle_call(_Msg, _From, State) ->
 
 handle_cast(poll, State) ->
 	NewState = do_poll(State),
-	{noreply, State};
+	{noreply, NewState};
 handle_cast(_Msg, State) ->
 	{noreply, State}.
 
 handle_info(poll, State) ->
 	NewState = do_poll(State),
-	{noreply, State}.
+	{noreply, NewState}.
 
 code_change(_Vsn, State, _Extra) ->
 	{ok, State}.
@@ -82,15 +82,15 @@ terminate(_Why, _State) -> ok.
 
 do_poll(State) ->
 	State1 = cancel_timer(State),
-	Headers = case State#state.last_etag of
+	Headers = case State1#state.last_etag of
 		undefined ->
 			[ {"accept", "application/vnd.github.v3+json"} ];
 		Etag ->
 			[ {"If-None-Match", Etag}, {"accept", "application/vnd.github.v3+json"} ]
 	end,
-	Request = {State#state.url, Headers},
+	Request = {State1#state.url, Headers},
 	HttpResponse = httpc:request(get, Request, [], []),
-	State2 = handle_http_response(HttpResponse, State),
+	State2 = handle_http_response(HttpResponse, State1),
 	start_timer(State2).
 
 handle_http_response({ok, {{_, 200, _}, Headers, Body}}, State) ->
@@ -112,8 +112,8 @@ handle_http_response(Failed, State) ->
 
 next_poll_time(Headers) ->
 	FixedHeaders = downcase_headers(Headers),
-	NextPollTimeStr = proplists:get_value("x-poll-interval", Headers, "undefined"),
-	NextPollTime = try erlang:list_to_integer(NextPollTimeStr) of
+	NextPollTimeStr = proplists:get_value("x-poll-interval", FixedHeaders, "undefined"),
+	try erlang:list_to_integer(NextPollTimeStr) of
 		N -> N * 1000
 	catch
 		error:badarg ->
