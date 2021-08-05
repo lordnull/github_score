@@ -26,9 +26,7 @@ polling_test_() ->
 				{<<"joe">>, <<"e3">>}
 			],
 			ok = fake_github:set_events(?MODULE, ExpectedEvents),
-			?debugHere,
 			ok = github_score_poller:force_poll(),
-			?debugHere,
 			Events = receive
 				{events, E} -> E
 			end,
