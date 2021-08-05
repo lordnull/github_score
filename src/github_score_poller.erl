@@ -32,7 +32,7 @@ next_poll_in() ->
 %% will reset the poll timer.
 -spec force_poll() -> ok.
 force_poll() ->
-	gen_server:cast(?MODULE, force_poll, infinity).
+	gen_server:cast(?MODULE, poll).
 
 % gen_server callbacks.
 
@@ -41,24 +41,103 @@ force_poll() ->
 	url = "http://localhost:8080/",
 	poll_action = fun(_) -> ok end,
 	last_etag = "",
-	poll_interval = 60
+	poll_interval = 60000
 }).
 
 init(#{ url := Url, poll_action := Callback} ) ->
-	{ok, Timer} = timer:send_after(1000, initial_poll),
+	Timer = erlang:send_after(1000, self(), poll),
 	State = #state{ poll_timer = Timer, url = Url , poll_action = Callback},
 	{ok, State}.
+
+handle_call(next_poll_in, _From, State) ->
+	case State#state.poll_timer of
+		undefined ->
+			{reply, never, State};
+		T ->
+			case erlang:read_timer(T) of
+				false ->
+					{reply, never, State};
+				N ->
+					{reply, N / 1000, State}
+			end
+	end;
 
 handle_call(_Msg, _From, State) ->
 	{reply, {error, invalid}, State}.
 
+handle_cast(poll, State) ->
+	NewState = do_poll(State),
+	{noreply, State};
 handle_cast(_Msg, State) ->
 	{noreply, State}.
 
-handle_info(initial_poll, State) ->
+handle_info(poll, State) ->
+	NewState = do_poll(State),
 	{noreply, State}.
 
 code_change(_Vsn, State, _Extra) ->
 	{ok, State}.
 
 terminate(_Why, _State) -> ok.
+
+do_poll(State) ->
+	State1 = cancel_timer(State),
+	Headers = case State#state.last_etag of
+		undefined ->
+			[ {"accept", "application/vnd.github.v3+json"} ];
+		Etag ->
+			[ {"If-None-Match", Etag}, {"accept", "application/vnd.github.v3+json"} ]
+	end,
+	Request = {State#state.url, Headers},
+	HttpResponse = httpc:request(get, Request, [], []),
+	State2 = handle_http_response(HttpResponse, State),
+	start_timer(State2).
+
+handle_http_response({ok, {{_, 200, _}, Headers, Body}}, State) ->
+	BodyBin = list_to_binary(Body),
+	Json = jsx:decode(BodyBin, [return_maps]),
+	Events = lists:map(fun decode_event/1, Json),
+	PollAction = State#state.poll_action,
+	_ = PollAction(Events),
+	NextPollTime = next_poll_time(Headers),
+	Etag = proplists:get_value("ETag", Headers),
+	State#state{ poll_interval = NextPollTime, last_etag = Etag};
+handle_http_response({ok, {{_, 304, _}, Headers, _}}, State) ->
+	NextPollTime = next_poll_time(Headers),
+	Etag = proplists:get_value("ETag", Headers),
+	State#state{ poll_interval = NextPollTime, last_etag = Etag };
+handle_http_response(Failed, State) ->
+	io:format("Failed to do a poll; previous poll interval will be retained: ~p", [Failed]),
+	State.
+
+next_poll_time(Headers) ->
+	FixedHeaders = downcase_headers(Headers),
+	NextPollTimeStr = proplists:get_value("x-poll-interval", Headers, "undefined"),
+	NextPollTime = try erlang:list_to_integer(NextPollTimeStr) of
+		N -> N * 1000
+	catch
+		error:badarg ->
+			infinity
+	end.
+
+downcase_headers(Headers) ->
+	[ { string:to_lower(F), V} || {F, V} <- Headers ].
+
+cancel_timer(#state{ poll_timer = undefined} = State) ->
+	State;
+cancel_timer(State) ->
+	_ = erlang:cancel_timer(State#state.poll_timer),
+	State#state{ poll_timer = undefined }.
+
+start_timer(#state{ poll_interval = infinity} = State) ->
+	State;
+start_timer(State) ->
+	Interval = State#state.poll_interval,
+	Timer = erlang:send_after(Interval, self(), poll),
+	State#state{ poll_timer = Timer }.
+
+decode_event(#{ <<"type">> := Type, <<"actor">> := Actor}) ->
+	#{ <<"id">> := Id} = Actor,
+	{Id, Type}.
+
+

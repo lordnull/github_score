@@ -27,11 +27,14 @@
 -export([start_server/1, stop_server/1]).
 -export([get_url/1, set_events/2, get_events/1]).
 
+-include_lib("eunit/include/eunit.hrl").
+
 %% @doc Start the cowboy listener and the fake github datastore. Name is used
 %% both for the cowboy listener and the server name; best practice is for it
 %% to be the same as the test fixture/suite it's for. This will start cowboy
 %% if not already done so.
 start_server(Name) ->
+	inets:start(),
 	% cowboy doesn't let up do port 0 for a random port, so we'll get it
 	% another way.
 	{ok, P} = gen_tcp:listen(0, []),
@@ -49,7 +52,9 @@ start_server(Name) ->
 
 stop_server(Name) ->
 	ok = gen_server:cast(Name, stop),
-	ok = cowboy:stop_listener(Name),
+	_ = spawn(fun() ->
+		ok = cowboy:stop_listener(Name)
+	end),
 	ok.
 
 get_url(Name) ->
@@ -71,7 +76,7 @@ handle_call(get_events, _From, State) ->
 handle_call(get_url_format, _From, State) ->
 	Port = State#state.port,
 	UrlIo = io_lib:format("http://localhost:~p/", [Port]),
-	{reply, iolist_to_binary(UrlIo), State}.
+	{reply, binary_to_list(iolist_to_binary(UrlIo)), State}.
 
 handle_cast({set_events, Events}, State) ->
 	{noreply, State#state{events = Events}};
@@ -83,10 +88,10 @@ handle_cast(stop, State) ->
 init(Req, Name) ->
 	Events = get_events(Name),
 	Encoded = encode_events(Events),
-	Reply = cowboy_req:reply(202,
+	Reply = cowboy_req:reply(200,
 		#{ <<"content-type">> => <<"application/vnd.github.v3+json">>
 		,  <<"etag">> => <<"1">>
-		,  <<"x-poll-interval">> => 3}, Encoded, Req),
+		,  <<"X-Poll-Interval">> => <<"3">>}, Encoded, Req),
 	{ok, Reply, Name}.
 
 encode_events(Events) ->
