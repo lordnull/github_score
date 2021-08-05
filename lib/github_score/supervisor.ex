@@ -9,7 +9,7 @@ defmodule GithubScore.Supervisor do
   def init(:ok) do
     children = [
       GithubScore.Datastore,
-      {GithubScore.Poller, "https://api.github.com/events"}
+      {GithubScore.Poller, ["https://api.github.com/events", fn(_) -> :ok end]}
     ]
 
     Supervisor.init(children, strategy: :one_for_one)
